@@ -21,40 +21,6 @@ import lightgbm as lgb
 logging.basicConfig(filename='model_training.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Feature selection using correlation analysis
-def analyze_correlation(X, threshold=0.9):
-    corr_matrix = X.corr()
-    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-    to_drop = [column for column in upper.columns if any(upper[column].abs() > threshold)]
-    print(f"Highly correlated features to drop: {to_drop}")
-    return X.drop(columns=to_drop, axis=1)
-
-# Feature selection using RFE
-def select_features(X, y, model, num_features):
-    selector = RFE(model, n_features_to_select=num_features, step=1)
-    selector = selector.fit(X, y)
-    selected_features = X.columns[selector.support_]
-    print(f"Selected features: {selected_features}")
-    return X[selected_features]
-
-# Balance data using SMOTE
-def balance_data(X, y):
-    smote = SMOTE(random_state=42)
-    X_balanced, y_balanced = smote.fit_resample(X, y)
-    print("Data balanced with SMOTE.")
-    return X_balanced, y_balanced
-
-# Scale features for models requiring scaling
-def scale_features(X_train, X_val, scale_models=False):
-    if scale_models:
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_val = scaler.transform(X_val)
-        print("Data scaled for applicable models.")
-    else:
-        print("No scaling applied for tree-based models.")
-    return X_train, X_val
-
 def train_random_forest(model, X_train, y_train):
     """Train Random Forest model"""
     model.fit(X_train, y_train)
@@ -314,14 +280,8 @@ if __name__ == "__main__":
     le = LabelEncoder()
     y = le.fit_transform(y)
 
-    # Correlation analysis
-    X = analyze_correlation(X)
-
     # Split data
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Balance data
-    X_train_balanced, y_train_balanced = balance_data(X_train, y_train)
 
     # Initialize models with their parameters
     models = {
@@ -351,9 +311,9 @@ if __name__ == "__main__":
         print(f"\nTraining {name}...")
         trained_model, metrics = train_and_evaluate_model(
             model, 
-            X_train_balanced, 
+            X_train, 
             X_val, 
-            y_train_balanced, 
+            y_train, 
             y_val, 
             name
         )
