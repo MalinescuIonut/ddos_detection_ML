@@ -182,7 +182,12 @@ if __name__ == "__main__":
         models_metrics[name] = metrics
         trained_models[name] = trained_model
 
-    # [10.6] Save the best performing model
+    # [10.6] Save all models
+    for model_name, trained_model in trained_models.items():
+        model_filename = f"model_{model_name.lower().replace(' ', '_')}.joblib"
+        joblib.dump(trained_model, model_filename)
+        print(f"\nSaved {model_name} model to {model_filename}")
+    
+    # Still print the best model for reference
     best_model_name = max(models_metrics.items(), key=lambda x: x[1]['f1'])[0]
-    joblib.dump(trained_models[best_model_name], f"best_model_{best_model_name.lower().replace(' ', '_')}.joblib")
-    print(f"\nBest model ({best_model_name}) saved!")
+    print(f"\nBest performing model was: {best_model_name}")

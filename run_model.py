@@ -1,11 +1,11 @@
-# Import required libraries
 import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
 
 
 # Load the pre-trained Random Forest model from disk
-model = joblib.load("best_model_random_forest.joblib")
+model = joblib.load("model_xgboost.joblib")
 
 
 def preprocess_data(X):
@@ -35,32 +35,28 @@ def predict_ddos(model, X):
     return y_pred, y_pred_proba
 
 
-def analyze_and_classify(file_path, model, save_predictions=True, save_ddos_only=True):
+def analyze_and_compare(file_path, auto_label_file, model):
     """
-    Main function to analyze network traffic and detect DDoS attacks.
+    Analyze the .parquet file, make predictions, and compare with auto-labeled dataset.
     Args:
-        file_path (str): Path to the parquet file containing network traffic data
-        model: Trained machine learning model
-        save_predictions (bool): Whether to save all predictions to CSV
-        save_ddos_only (bool): Whether to save only DDoS-flagged traffic to CSV
+        file_path (str): Path to the .parquet file containing network traffic data.
+        auto_label_file (str): Path to the auto-labeled CSV file for comparison.
+        model: Trained machine learning model.
     """
     # Load and display initial data information
-    print(f"Analyzing and classifying data from: {file_path}")
+    print(f"Analyzing data from: {file_path}")
     data = pd.read_parquet(file_path, engine="pyarrow")
+    
+    # Load the auto-labeled dataset
+    auto_labeled_data = pd.read_csv(auto_label_file)
     
     # Print basic dataset information
     print(f"Dataset shape: {data.shape}")
     print("\nSample of first 5 rows:")
     print(data.head())
     
-    # Display missing value statistics
-    print("\nMissing values in dataset:")
-    print(data.isnull().sum())
-    
-    # Select only numerical features for prediction
+    # Preprocess features
     X = data.select_dtypes(include=['float64', 'int64']).copy()
-    
-    # Preprocess the features
     X_preprocessed = preprocess_data(X)
     
     # Make predictions
@@ -68,46 +64,50 @@ def analyze_and_classify(file_path, model, save_predictions=True, save_ddos_only
     
     # Add prediction results to the original dataframe
     data['Predictions'] = predictions
-    data['DDoS_Probability'] = probabilities[:, 1]  # Probability of being a DDoS attack
+    data['DDoS_Probability'] = probabilities[:, 1]
     
-    # Save complete results if requested
-    if save_predictions:
-        output_file = file_path.replace(".parquet", "_predictions.csv")
-        data.to_csv(output_file, index=False)
-        print(f"Predictions saved to: {output_file}")
+    # Map labels for auto-labeled dataset to binary format
+    auto_labeled_data['Auto_Label'] = auto_labeled_data['Auto_Label'].map({'DDoS': 1, 'Normal': 0})
     
-    # Save only DDoS traffic if requested
-    if save_ddos_only:
-        ddos_data = data[data['Predictions'] == 1]
-        ddos_output_file = file_path.replace(".parquet", "_ddos_only.csv")
-        ddos_data.to_csv(ddos_output_file, index=False)
-        print(f"DDoS-only data saved to: {ddos_output_file}")
+    # Compare model predictions to auto-labeled dataset
+    if 'Auto_Label' in auto_labeled_data:
+        y_true = auto_labeled_data['Auto_Label']
+        y_pred = data['Predictions']
+        
+        # Evaluate predictions
+        evaluate_predictions(y_true, y_pred)
     
-    # Create visualization of results
-    visualize_predictions(predictions)
+    # Save predictions
+    output_file = file_path.replace(".parquet", "_predictions.csv")
+    data.to_csv(output_file, index=False)
+    print(f"Predictions saved to: {output_file}")
 
 
-def visualize_predictions(predictions):
+def evaluate_predictions(y_true, y_pred):
     """
-    Create a bar chart showing the distribution of normal vs DDoS traffic.
-    Args:
-        predictions (array): Array of model predictions (0 for normal, 1 for DDoS)
+    Calculate and print various performance metrics
     """
-    # Count occurrences of each class
-    prediction_counts = pd.Series(predictions).value_counts()
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
     
-    # Create and display bar chart
-    prediction_counts.plot(kind='bar', color='skyblue')
-    plt.title("DDoS Detection Results")
-    plt.xlabel("Class")
-    plt.ylabel("Count")
-    plt.show()
+    print("\nModel Performance on Testing Data:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1 Score: {f1:.4f}")
+    
+    # Print detailed classification report
+    print("\nDetailed Classification Report:")
+    print(classification_report(y_true, y_pred))
 
 
 # Execute if run as a script
 if __name__ == "__main__":
-    # Specify the path to the testing data
-    test_file = "syn-testing.parquet"
+    # Specify the paths to the testing data and auto-labeled dataset
+    test_file = "syn-testing.parquet"  # Replace with your .parquet file path
+    auto_label_file = "labeled_dataset.csv"  # Replace with your auto-labeled CSV file path
 
-    # Run the analysis
-    analyze_and_classify(test_file, model)
+    # Run the analysis and comparison
+    analyze_and_compare(test_file, auto_label_file, model)
